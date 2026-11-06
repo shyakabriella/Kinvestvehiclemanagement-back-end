@@ -1,0 +1,99 @@
+import { NextRequest, NextResponse } from "next/server";
+import { laravelRequest } from "@/lib/api/laravel";
+
+export async function POST(request: NextRequest) {
+  if (
+    request.headers.get("origin") !==
+    request.nextUrl.origin
+  ) {
+    return NextResponse.json(
+      { message: "Invalid request origin." },
+      { status: 403 }
+    );
+  }
+
+  let input: unknown;
+
+  try {
+    input = await request.json();
+  } catch {
+    return NextResponse.json(
+      { message: "Invalid request body." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input)
+  ) {
+    return NextResponse.json(
+      { message: "Invalid reset information." },
+      { status: 422 }
+    );
+  }
+
+  const data = input as Record<string, unknown>;
+
+  if (
+    typeof data.token !== "string" ||
+    !data.token ||
+    data.token.length > 2048 ||
+    typeof data.email !== "string" ||
+    data.email.length > 255 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email) ||
+    typeof data.password !== "string" ||
+    data.password.length < 12 ||
+    data.password.length > 1024 ||
+    typeof data.password_confirmation !== "string" ||
+    data.password !== data.password_confirmation
+  ) {
+    return NextResponse.json(
+      {
+        message:
+          "Invalid reset link or password details.",
+      },
+      { status: 422 }
+    );
+  }
+
+  try {
+    const response = await laravelRequest(
+      "/auth/reset-password",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: data.token,
+          email: data.email.trim(),
+          password: data.password,
+          password_confirmation:
+            data.password_confirmation,
+        }),
+      }
+    );
+
+    const payload = await response.json().catch(() => ({
+      message: "Unexpected Laravel response.",
+    }));
+
+    return NextResponse.json(payload, {
+      status: response.status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+      },
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        message:
+          "Password reset service is temporarily unavailable.",
+      },
+      { status: 503 }
+    );
+  }
+}

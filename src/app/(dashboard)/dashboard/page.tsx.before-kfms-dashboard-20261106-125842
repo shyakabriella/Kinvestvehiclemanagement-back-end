@@ -1,0 +1,136 @@
+import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth/session";
+import { laravelRequest } from "@/lib/api/laravel";
+import type { AuthUser } from "@/types/auth";
+
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-slate-100">
+          <div className="rounded-2xl bg-white px-8 py-6 text-center shadow-sm">
+            <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-purple-200 border-t-purple-600" />
+            <p className="text-sm font-medium text-slate-700">
+              Loading Kinvest dashboard...
+            </p>
+          </div>
+        </main>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+async function DashboardContent() {
+  const session = await getSession();
+
+  if (
+    !session.accessToken ||
+    !session.expiresAt ||
+    Date.now() >= session.expiresAt
+  ) {
+    redirect("/login");
+  }
+
+  let user: AuthUser;
+
+  try {
+    const response = await laravelRequest(
+      "/auth/me",
+      { method: "GET" },
+      session.accessToken
+    );
+
+    if (response.status === 401 || response.status === 403) {
+      redirect("/login");
+    }
+
+    if (!response.ok) {
+      throw new Error("Backend unavailable.");
+    }
+
+    const result = (await response.json()) as {
+      user: AuthUser;
+    };
+
+    user = result.user;
+  } catch (error) {
+    // Preserve Next.js navigation errors.
+    if (
+      error &&
+      typeof error === "object" &&
+      "digest" in error &&
+      typeof error.digest === "string" &&
+      error.digest.startsWith("NEXT_REDIRECT")
+    ) {
+      throw error;
+    }
+
+    return (
+      <main className="p-8 text-slate-900">
+        <h1 className="text-xl font-semibold">
+          Fleet service temporarily unavailable
+        </h1>
+        <p className="mt-2 text-slate-600">
+          Please refresh the page when the backend connection is restored.
+        </p>
+      </main>
+    );
+  }
+
+  if (user.status !== "active") {
+    redirect("/login");
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-100 p-6 md:p-10">
+      <div className="mx-auto max-w-6xl">
+        <div className="rounded-2xl bg-white p-8 shadow-sm">
+          <p className="text-sm font-medium text-blue-700">
+            Kinvest Fleet Management System
+          </p>
+
+          <h1 className="mt-3 text-3xl font-bold text-slate-900">
+            Welcome, {user.name}
+          </h1>
+
+          <p className="mt-3 text-slate-600">
+            You have successfully signed in to KFMS.
+          </p>
+
+          <div className="mt-7 grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-5">
+              <p className="text-sm text-slate-500">Account</p>
+              <p className="mt-2 font-semibold text-slate-900">
+                {user.email}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-5">
+              <p className="text-sm text-slate-500">Role</p>
+              <p className="mt-2 font-semibold text-slate-900">
+                {user.roles.join(", ") || "Not assigned"}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-5">
+              <p className="text-sm text-slate-500">Account status</p>
+              <p className="mt-2 font-semibold capitalize text-green-700">
+                {user.status}
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-8 text-sm text-slate-500">
+            This is the initial authenticated dashboard.
+            The employee and administrator dashboards will be
+            built in the next frontend steps.
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}

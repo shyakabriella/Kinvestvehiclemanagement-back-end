@@ -1,0 +1,228 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { ShieldCheck, X } from "lucide-react";
+
+type Role =
+  | "employee"
+  | "fleet_admin"
+  | "management"
+  | "system_admin";
+
+type Employee = {
+  id: number;
+  name: string;
+  email: string;
+  roles?: Array<string | { name: string }>;
+};
+
+type Props = {
+  employee: Employee;
+  onClose: () => void;
+  onSaved: () => void;
+};
+
+const choices: { value: Role; label: string }[] = [
+  { value: "employee", label: "Employee" },
+  { value: "fleet_admin", label: "Fleet Administrator" },
+  { value: "management", label: "Management" },
+  { value: "system_admin", label: "System Administrator" },
+];
+
+function existingRoles(employee: Employee): string[] {
+  return (employee.roles ?? []).map((role) =>
+    typeof role === "string" ? role : role.name
+  );
+}
+
+export default function EmployeeRoleModal({
+  employee,
+  onClose,
+  onSaved,
+}: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  const originalRoles = existingRoles(employee);
+
+  const initialRole = choices.find(
+    (item) => originalRoles.includes(item.value)
+  )?.value ?? "employee";
+
+  const [role, setRole] = useState<Role>(initialRole);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (dialog && !dialog.open) {
+      dialog.showModal();
+    }
+
+    return () => {
+      if (dialog?.open) dialog.close();
+    };
+  }, []);
+
+  function close() {
+    if (!loading) onClose();
+  }
+
+  async function saveRole() {
+    if (loading) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/backend/users/${employee.id}/roles`,
+        {
+          method: "PUT",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            roles: [role],
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(
+          typeof result.message === "string"
+            ? result.message
+            : "Unable to update employee role."
+        );
+        return;
+      }
+
+      onSaved();
+    } catch {
+      setError("Unable to connect to the server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <dialog
+      ref={dialogRef}
+      onClose={onClose}
+      onCancel={(event) => {
+        if (loading) event.preventDefault();
+      }}
+      aria-labelledby="employee-role-title"
+      className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-950/55"
+    >
+      <div className="flex items-center justify-between border-b border-slate-100 p-6">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-violet-50 p-3 text-violet-600">
+            <ShieldCheck size={23} />
+          </div>
+
+          <div>
+            <h2 id="employee-role-title" className="text-lg font-bold">
+              Manage Employee Role
+            </h2>
+            <p className="text-xs text-slate-500">
+              Assign account access
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          disabled={loading}
+          onClick={close}
+          aria-label="Close role dialog"
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="space-y-5 p-6">
+        <div className="rounded-xl bg-slate-50 p-4">
+          <p className="font-semibold">{employee.name}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {employee.email}
+          </p>
+          <p className="mt-3 text-xs text-slate-600">
+            Current roles:{" "}
+            <strong>
+              {originalRoles.length
+                ? originalRoles.join(", ").replaceAll("_", " ")
+                : "None"}
+            </strong>
+          </p>
+        </div>
+
+        <div>
+          <label
+            htmlFor="employee-new-role"
+            className="mb-2 block text-sm font-semibold"
+          >
+            Assign Role
+          </label>
+
+          <select
+            id="employee-new-role"
+            value={role}
+            onChange={(event) =>
+              setRole(event.target.value as Role)
+            }
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500"
+          >
+            {choices.map((choice) => (
+              <option
+                key={choice.value}
+                value={choice.value}
+              >
+                {choice.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <p className="rounded-xl bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+          Changing this role will replace all currently assigned
+          roles and may change the employee&apos;s access to KFMS.
+          Administrator changes are recorded in the audit log.
+        </p>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+          >
+            {error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+          <button
+            type="button"
+            onClick={close}
+            disabled={loading}
+            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={saveRole}
+            disabled={loading}
+            className="rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            {loading ? "Saving..." : "Save Role"}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}

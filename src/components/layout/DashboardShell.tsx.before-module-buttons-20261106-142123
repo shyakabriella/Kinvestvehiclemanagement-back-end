@@ -1,0 +1,544 @@
+"use client";
+
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  LayoutDashboard,
+  Users,
+  EllipsisVertical,
+  ShieldCheck,
+  CarFront,
+  CalendarDays,
+  Route,
+  Wrench,
+  ChartNoAxesColumn,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Bell,
+  UserRound,
+  KeyRound,
+  CircleCheck,
+  LockKeyhole,
+  Building2,
+  CircleHelp,
+} from "lucide-react";
+
+import type { AuthUser } from "@/types/auth";
+
+type IconType = typeof LayoutDashboard;
+
+type NavigationItem = {
+  label: string;
+  href: string;
+  icon: IconType;
+  available: boolean;
+};
+
+const primaryNavigation: NavigationItem[] = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    available: true,
+  },
+  {
+    label: "Employees",
+    href: "/dashboard/users",
+    icon: Users,
+    available: true,
+  },
+  {
+    label: "Departments",
+    href: "/dashboard/departments",
+    icon: Building2,
+    available: false,
+  },
+];
+
+const fleetNavigation: NavigationItem[] = [
+  {
+    label: "Vehicles",
+    href: "/dashboard/vehicles",
+    icon: CarFront,
+    available: false,
+  },
+  {
+    label: "Vehicle Bookings",
+    href: "/dashboard/bookings",
+    icon: CalendarDays,
+    available: false,
+  },
+  {
+    label: "Trips & Logbook",
+    href: "/dashboard/trips",
+    icon: Route,
+    available: false,
+  },
+  {
+    label: "Maintenance",
+    href: "/dashboard/maintenance",
+    icon: Wrench,
+    available: false,
+  },
+  {
+    label: "Reports",
+    href: "/dashboard/reports",
+    icon: ChartNoAxesColumn,
+    available: false,
+  },
+];
+
+const settingsNavigation: NavigationItem[] = [
+  {
+    label: "Settings",
+    href: "/dashboard/settings",
+    icon: Settings,
+    available: false,
+  },
+];
+
+const employeeQuickLinks = [
+  {
+    label: "Employee Management",
+    href: "/dashboard/users",
+    icon: Users,
+  },
+  {
+    label: "My Profile",
+    href: "/dashboard/profile",
+    icon: UserRound,
+  },
+  {
+    label: "Account Security",
+    href: "/dashboard/security",
+    icon: KeyRound,
+  },
+  {
+    label: "Roles & Permissions",
+    href: "/dashboard/roles",
+    icon: ShieldCheck,
+  },
+];
+
+function NavigationSection({
+  title,
+  items,
+  onNavigate,
+}: {
+  title: string;
+  items: NavigationItem[];
+  onNavigate: () => void;
+}) {
+  const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  const employeePaths = employeeQuickLinks.map(
+    (item) => item.href
+  );
+
+  function isActive(href: string) {
+    if (href === "/dashboard") {
+      return pathname === href;
+    }
+
+    if (href === "/dashboard/users") {
+      return employeePaths.some(
+        (path) =>
+          pathname === path ||
+          pathname.startsWith(path + "/")
+      );
+    }
+
+    return (
+      pathname === href ||
+      pathname.startsWith(href + "/")
+    );
+  }
+
+  return (
+    <section className="mb-7">
+      <h3 className="mb-3 px-5 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+        {title}
+      </h3>
+
+      <div className="space-y-1 px-3">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+          const isEmployee = item.href === "/dashboard/users";
+
+          if (!item.available) {
+            return (
+              <div
+                key={item.href}
+                title="This page will be connected in a later step"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-slate-400"
+              >
+                <Icon size={18} strokeWidth={1.9} />
+                <span className="flex-1">{item.label}</span>
+                <LockKeyhole size={13} className="opacity-50" />
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={item.href}
+              className="relative"
+              ref={isEmployee ? menuRef : undefined}
+            >
+              <div
+                className={`flex items-center rounded-xl transition ${
+                  active
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <Link
+                  href={item.href}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onNavigate();
+                  }}
+                  aria-current={active ? "page" : undefined}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold"
+                >
+                  <span
+                    className={`rounded-lg p-1.5 ${
+                      active
+                        ? "bg-indigo-600 text-white"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <Icon size={16} />
+                  </span>
+
+                  <span className="min-w-0 flex-1 truncate">
+                    {item.label}
+                  </span>
+                </Link>
+
+                {isEmployee && (
+                  <button
+                    type="button"
+                    title="Employee pages"
+                    aria-label="Open employee options"
+                    aria-expanded={menuOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setMenuOpen((value) => !value)}
+                    className="mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-indigo-500"
+                  >
+                    <EllipsisVertical size={19} />
+                  </button>
+                )}
+              </div>
+
+              {isEmployee && menuOpen && (
+                <div
+                  role="menu"
+                  aria-label="Employee pages"
+                  className="relative z-30 mx-2 mt-2 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
+                >
+                  {employeeQuickLinks.map((link) => {
+                    const QuickIcon = link.icon;
+                    const selected =
+                      pathname === link.href ||
+                      pathname.startsWith(link.href + "/");
+
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onNavigate();
+                        }}
+                        className={`flex items-center gap-3 rounded-lg px-3 py-3 text-sm transition ${
+                          selected
+                            ? "bg-indigo-50 font-semibold text-indigo-700"
+                            : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <QuickIcon size={17} />
+                        <span>{link.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function Initials({ name }: { name: string }) {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase();
+
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-600">
+      {initials || "U"}
+    </span>
+  );
+}
+
+const DashboardUserContext =
+  createContext<AuthUser | null>(null);
+
+export function useDashboardUser(): AuthUser {
+  const user = useContext(DashboardUserContext);
+
+  if (!user) {
+    throw new Error(
+      "Dashboard user context is unavailable."
+    );
+  }
+
+  return user;
+}
+
+export default function DashboardShell({
+  user,
+  children,
+}: {
+  user: AuthUser;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function logout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Logout request failed.");
+      }
+
+      router.replace("/login");
+      router.refresh();
+    } catch {
+      setLoggingOut(false);
+      window.alert(
+        "Unable to finish signing out. Please try again."
+      );
+    }
+  }
+
+  const role = user.roles
+    .map((r) => r.replaceAll("_", " "))
+    .join(", ");
+
+  const sidebar = (
+    <div className="flex h-full flex-col">
+      <div className="flex h-21 items-center gap-3 border-b border-slate-200 px-5">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-600 font-extrabold text-white shadow-md shadow-indigo-200">
+          K
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-extrabold tracking-wide text-indigo-600">
+            KINVEST
+          </div>
+
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Fleet Management
+          </div>
+        </div>
+
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+          className="rounded-lg p-2 text-slate-500 lg:hidden"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-7">
+        <NavigationSection
+          title="Main Menu"
+          items={primaryNavigation}
+          onNavigate={() => setMobileOpen(false)}
+        />
+
+        <NavigationSection
+          title="Fleet Operations"
+          items={fleetNavigation}
+          onNavigate={() => setMobileOpen(false)}
+        />
+
+        <NavigationSection
+          title="Account"
+          items={settingsNavigation}
+          onNavigate={() => setMobileOpen(false)}
+        />
+
+        <div className="px-3">
+          <div className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-slate-400">
+            <CircleHelp size={18} />
+            Help & Support
+          </div>
+        </div>
+      </nav>
+
+      <div className="border-t border-slate-200 p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Initials name={user.name} />
+
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-slate-800">
+                {user.name}
+              </p>
+
+              <p className="truncate text-xs capitalize text-slate-400">
+                {role || "User"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={logout}
+            disabled={loggingOut}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 disabled:opacity-50"
+          >
+            <LogOut size={16} />
+
+            {loggingOut ? "Signing out..." : "Logout"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <DashboardUserContext.Provider value={user}>
+    <div className="min-h-screen bg-[#f5f7fc] text-slate-800">
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation overlay"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[270px] transform border-r border-slate-200 bg-[#f8f9fe] transition-transform duration-200 lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {sidebar}
+      </aside>
+
+      <div className="min-w-0 lg:pl-[270px]">
+        <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200 bg-white px-5 md:px-8">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              aria-label="Open navigation"
+              onClick={() => setMobileOpen(true)}
+              className="rounded-xl border border-slate-200 p-2.5 text-slate-600 lg:hidden"
+            >
+              <Menu size={21} />
+            </button>
+
+            <div>
+              <h1 className="text-lg font-bold text-slate-800 md:text-xl">
+                Dashboard
+              </h1>
+
+              <p className="hidden text-xs text-slate-400 sm:block">
+                Kinvest Fleet Management System
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 md:gap-5">
+            <span className="hidden rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 sm:inline-flex">
+              <CircleCheck size={14} className="mr-1.5" />
+              Active account
+            </span>
+
+            <div
+              title="Notifications will be available in a later module"
+              className="rounded-xl border border-slate-200 p-2.5 text-slate-400"
+            >
+              <Bell size={19} />
+            </div>
+
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+              <Initials name={user.name} />
+
+              <div className="hidden max-w-40 sm:block">
+                <p className="truncate text-sm font-semibold">
+                  {user.name}
+                </p>
+
+                <p className="truncate text-xs capitalize text-slate-400">
+                  {role || "User"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {children}
+      </div>
+    </div>
+    </DashboardUserContext.Provider>
+  );
+}

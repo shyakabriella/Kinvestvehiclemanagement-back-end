@@ -1,0 +1,116 @@
+import { NextRequest, NextResponse } from "next/server";
+import { laravelRequest } from "@/lib/api/laravel";
+
+const successMessage =
+  "If this email belongs to an active account, " +
+  "password reset instructions will be sent.";
+
+export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
+
+  if (origin !== request.nextUrl.origin) {
+    return NextResponse.json(
+      { message: "Invalid request origin." },
+      { status: 403 }
+    );
+  }
+
+  let input: unknown;
+
+  try {
+    input = await request.json();
+  } catch {
+    return NextResponse.json(
+      { message: "Invalid request body." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input)
+  ) {
+    return NextResponse.json(
+      { message: "Enter a valid email address." },
+      { status: 422 }
+    );
+  }
+
+  const data = input as Record<string, unknown>;
+
+  if (
+    typeof data.email !== "string" ||
+    data.email.length > 255 ||
+    !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(data.email)
+  ) {
+    return NextResponse.json(
+      { message: "Enter a valid email address." },
+      { status: 422 }
+    );
+  }
+
+  try {
+    const response = await laravelRequest(
+      "/auth/forgot-password",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: data.email.trim(),
+        }),
+      }
+    );
+
+    // Do not reveal whether a specific account exists.
+    if (response.ok || response.status === 404) {
+      return NextResponse.json(
+        { message: successMessage },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    }
+
+    // Preserve throttling and operational errors.
+    if (response.status === 429) {
+      return NextResponse.json(
+        {
+          message:
+            "Too many requests. Please try again later.",
+        },
+        { status: 429 }
+      );
+    }
+
+    if (response.status === 422) {
+      return NextResponse.json(
+        { message: successMessage },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        message:
+          "Password recovery is temporarily unavailable. " +
+          "Please try again later.",
+      },
+      { status: 503 }
+    );
+  } catch {
+    return NextResponse.json(
+      {
+        message:
+          "Password recovery is temporarily unavailable. " +
+          "Please try again later.",
+      },
+      { status: 503 }
+    );
+  }
+}

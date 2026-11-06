@@ -1,0 +1,66 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth/session";
+import { laravelRequest } from "@/lib/api/laravel";
+
+export async function GET(request: NextRequest) {
+  const session = await getSession();
+
+  if (
+    !session.accessToken ||
+    !session.expiresAt ||
+    Date.now() >= session.expiresAt
+  ) {
+    return NextResponse.json(
+      { message: "Authentication required." },
+      { status: 401 }
+    );
+  }
+
+  const search = request.nextUrl.searchParams.get("search") || "";
+  const rawPage = request.nextUrl.searchParams.get("page") || "1";
+  const page = Number(rawPage);
+
+  if (
+    search.length > 150 ||
+    !Number.isSafeInteger(page) ||
+    page < 1 ||
+    page > 100000
+  ) {
+    return NextResponse.json(
+      { message: "Invalid search parameters." },
+      { status: 422 }
+    );
+  }
+
+  const params = new URLSearchParams({
+    page: String(page),
+  });
+
+  if (search.trim()) {
+    params.set("search", search.trim());
+  }
+
+  try {
+    const response = await laravelRequest(
+      `/users?${params.toString()}`,
+      { method: "GET" },
+      session.accessToken
+    );
+
+    const payload = await response.json().catch(() => ({
+      message: "Unable to retrieve employees.",
+    }));
+
+    return NextResponse.json(payload, {
+      status: response.status,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch {
+    return NextResponse.json(
+      { message: "Laravel backend is unavailable." },
+      { status: 503 }
+    );
+  }
+}

@@ -1,0 +1,273 @@
+"use client";
+
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+
+import {
+  Pencil,
+  X,
+  UserRound,
+  Mail,
+  Save,
+} from "lucide-react";
+
+type Employee = {
+  id: number;
+  name: string;
+  email: string;
+  status: string;
+  roles?: Array<string | { name: string }>;
+};
+
+type ApiResponse = {
+  message?: string;
+  errors?: Record<string, string[]>;
+};
+
+type Props = {
+  employee: Employee;
+  onClose: () => void;
+  onSaved: () => void;
+};
+
+export default function EditEmployeeModal({
+  employee,
+  onClose,
+  onSaved,
+}: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  const [name, setName] = useState(employee.name);
+  const [email, setEmail] = useState(employee.email);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] =
+    useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    dialogRef.current?.focus();
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!loading) onClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      previousFocus?.focus();
+    };
+  }, [loading, onClose]);
+
+  function close() {
+    if (loading) return;
+    onClose();
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (loading) return;
+
+    setLoading(true);
+    setError("");
+    setFieldErrors({});
+
+    try {
+      const response = await fetch(
+        `/api/backend/users/${employee.id}`,
+        {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+          }),
+        }
+      );
+
+      const result = (await response.json()) as ApiResponse;
+
+      if (!response.ok) {
+        setError(
+          response.status === 403
+            ? "You do not have permission to edit this employee."
+            : result.message || "Employee update failed."
+        );
+
+        setFieldErrors(result.errors || {});
+        return;
+      }
+
+      onSaved();
+    } catch {
+      setError(
+        "Unable to connect to the server. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function fieldError(field: string) {
+    return fieldErrors[field]?.map((message) => (
+      <p
+        key={message}
+        className="mt-1 text-xs text-red-600"
+      >
+        {message}
+      </p>
+    ));
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/60 px-4 py-6">
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-employee-title"
+        className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl"
+      >
+      <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-indigo-50 p-3 text-indigo-600">
+            <Pencil size={22} />
+          </div>
+
+          <div>
+            <h2
+              id="edit-employee-title"
+              className="text-lg font-bold"
+            >
+              Edit Employee
+            </h2>
+
+            <p className="text-xs text-slate-500">
+              Employee ID: #{employee.id}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={close}
+          disabled={loading}
+          aria-label="Close edit employee modal"
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <form onSubmit={save} className="space-y-5 p-4 sm:p-6">
+        {error && (
+          <div
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
+        <div>
+          <label
+            htmlFor="edit-employee-name"
+            className="mb-2 block text-sm font-semibold"
+          >
+            Full Name
+          </label>
+
+          <div className="relative">
+            <UserRound
+              size={18}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+
+            <input
+              id="edit-employee-name"
+              type="text"
+              required
+              maxLength={255}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 py-3 pl-12 pr-4 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
+
+          {fieldError("name")}
+        </div>
+
+        <div>
+          <label
+            htmlFor="edit-employee-email"
+            className="mb-2 block text-sm font-semibold"
+          >
+            Email Address
+          </label>
+
+          <div className="relative">
+            <Mail
+              size={18}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+
+            <input
+              id="edit-employee-email"
+              type="email"
+              required
+              maxLength={255}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 py-3 pl-12 pr-4 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
+
+          {fieldError("email")}
+        </div>
+
+        <div className="rounded-xl bg-indigo-50 p-4 text-xs leading-6 text-indigo-800">
+          This form changes employee contact information only.
+          Account status and permissions are managed separately.
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+          <button
+            type="button"
+            onClick={close}
+            disabled={loading}
+            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            <Save size={17} />
+            {loading ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </form>
+    </div>
+    </div>
+  );
+}

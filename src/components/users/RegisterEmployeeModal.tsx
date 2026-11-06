@@ -1,0 +1,299 @@
+"use client";
+
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { X, UserPlus, Eye, EyeOff } from "lucide-react";
+import { useDashboardUser } from "@/components/layout/DashboardShell";
+
+type Role = "employee" | "fleet_admin" | "management" | "system_admin";
+
+type ApiResult = {
+  message?: string;
+  errors?: Record<string, string[]>;
+};
+
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+};
+
+export default function RegisterEmployeeModal({
+  open,
+  onClose,
+  onCreated,
+}: Props) {
+  const user = useDashboardUser();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  const isAdmin = user.roles.includes("system_admin");
+  const canCreate =
+    isAdmin || user.permissions.includes("users.create");
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [role, setRole] = useState<Role>("employee");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  function close() {
+    if (loading) return;
+    onClose();
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (loading || !canCreate) return;
+
+    setError("");
+    setErrors({});
+
+    if (password !== confirmation) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (password.length < 12) {
+      setError("Password must contain at least 12 characters.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/backend/users", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          password_confirmation: confirmation,
+          role: isAdmin ? role : "employee",
+        }),
+      });
+
+      const result = (await response.json()) as ApiResult;
+
+      if (!response.ok) {
+        setError(result.message || "Registration failed.");
+        setErrors(result.errors || {});
+        return;
+      }
+
+      setName("");
+      setEmail("");
+      setPassword("");
+      setConfirmation("");
+      setRole("employee");
+      setShowPassword(false);
+
+      onCreated();
+      onClose();
+    } catch {
+      setError("Unable to connect to the server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function fieldError(field: string) {
+    return errors[field]?.map((message) => (
+      <p key={message} className="mt-1 text-xs text-red-600">
+        {message}
+      </p>
+    ));
+  }
+
+  return (
+    <dialog
+      ref={dialogRef}
+      onClose={onClose}
+      onCancel={(event) => {
+        if (loading) event.preventDefault();
+      }}
+      aria-labelledby="register-employee-title"
+      className="fixed inset-0 m-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-950/50"
+    >
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white p-6">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-indigo-50 p-3 text-indigo-600">
+            <UserPlus size={22} />
+          </div>
+          <div>
+            <h2 id="register-employee-title" className="text-lg font-bold">
+              Register New Employee
+            </h2>
+            <p className="text-xs text-slate-500">
+              Add an employee to Kinvest Fleet Management
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={close}
+          aria-label="Close modal"
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+        >
+          <X size={20} />
+        </button>
+      </header>
+
+      {!canCreate ? (
+        <p className="p-6 text-sm text-red-600">
+          You do not have permission to register employees.
+        </p>
+      ) : (
+        <form onSubmit={submit} className="space-y-5 p-4 sm:p-6">
+          {error && (
+            <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+            <div>
+              <label htmlFor="employee-name" className="mb-2 block text-sm font-semibold">
+                Full Name
+              </label>
+              <input
+                id="employee-name"
+                required
+                maxLength={255}
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Employee full name"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500"
+              />
+              {fieldError("name")}
+            </div>
+
+            <div>
+              <label htmlFor="employee-email" className="mb-2 block text-sm font-semibold">
+                Email Address
+              </label>
+              <input
+                id="employee-email"
+                type="email"
+                required
+                maxLength={255}
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="employee@company.com"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500"
+              />
+              {fieldError("email")}
+            </div>
+
+            <div>
+              <label htmlFor="employee-password" className="mb-2 block text-sm font-semibold">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="employee-password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={12}
+                  maxLength={1024}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minimum 12 characters"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-12 text-sm outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {fieldError("password")}
+            </div>
+
+            <div>
+              <label htmlFor="employee-confirmation" className="mb-2 block text-sm font-semibold">
+                Confirm Password
+              </label>
+              <input
+                id="employee-confirmation"
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={12}
+                maxLength={1024}
+                autoComplete="new-password"
+                value={confirmation}
+                onChange={(e) => setConfirmation(e.target.value)}
+                placeholder="Repeat password"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500"
+              />
+              {fieldError("password_confirmation")}
+            </div>
+          </div>
+
+          {isAdmin && (
+            <div>
+              <label htmlFor="employee-role" className="mb-2 block text-sm font-semibold">
+                Employee Role
+              </label>
+              <select
+                id="employee-role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500"
+              >
+                <option value="employee">Employee</option>
+                <option value="fleet_admin">Fleet Administrator</option>
+                <option value="management">Management</option>
+                <option value="system_admin">System Administrator</option>
+              </select>
+            </div>
+          )}
+
+          <p className="rounded-xl bg-indigo-50 p-3 text-xs text-indigo-800">
+            Share the initial password securely with the employee.
+          </p>
+
+          <footer className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={close}
+              className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {loading ? "Registering..." : "Register Employee"}
+            </button>
+          </footer>
+        </form>
+      )}
+    </dialog>
+  );
+}

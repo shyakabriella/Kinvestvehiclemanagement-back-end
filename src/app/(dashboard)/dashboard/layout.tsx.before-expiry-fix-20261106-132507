@@ -1,0 +1,115 @@
+import { Suspense, type ReactNode } from "react";
+import { redirect } from "next/navigation";
+
+import { getSession } from "@/lib/auth/session";
+import { laravelRequest } from "@/lib/api/laravel";
+import DashboardShell from "@/components/layout/DashboardShell";
+import type { AuthUser } from "@/types/auth";
+
+function LoadingDashboard() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f5f7fc]">
+      <div className="rounded-2xl bg-white px-10 py-8 text-center shadow-sm">
+        <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
+        <p className="text-sm font-medium text-slate-600">
+          Loading Kinvest workspace...
+        </p>
+      </div>
+    </main>
+  );
+}
+
+async function AuthenticatedLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const session = await getSession();
+
+  if (
+    !session.accessToken ||
+    !session.expiresAt ||
+    Date.now() >= session.expiresAt
+  ) {
+    redirect("/login");
+  }
+
+  let response: Response;
+
+  try {
+    response = await laravelRequest(
+      "/auth/me",
+      { method: "GET" },
+      session.accessToken
+    );
+  } catch {
+    return (
+      <main className="p-10">
+        <h1 className="text-xl font-semibold">
+          Laravel service is unavailable
+        </h1>
+        <p className="mt-2 text-slate-500">
+          Please check the backend connection.
+        </p>
+      </main>
+    );
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    redirect("/login");
+  }
+
+  if (!response.ok) {
+    return (
+      <main className="p-10">
+        Unable to load your authenticated account.
+      </main>
+    );
+  }
+
+  let payload: { user?: AuthUser };
+
+  try {
+    payload = await response.json();
+  } catch {
+    return (
+      <main className="p-10">
+        Invalid account response from Laravel.
+      </main>
+    );
+  }
+
+  const user = payload.user;
+
+  if (!user || user.status !== "active") {
+    redirect("/login");
+  }
+
+  return (
+    <DashboardShell
+      user={{
+        ...user,
+        roles: Array.isArray(user.roles) ? user.roles : [],
+        permissions: Array.isArray(user.permissions)
+          ? user.permissions
+          : [],
+      }}
+    >
+      {children}
+    </DashboardShell>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <Suspense fallback={<LoadingDashboard />}>
+      <AuthenticatedLayout>
+        {children}
+      </AuthenticatedLayout>
+    </Suspense>
+  );
+}
